@@ -15,10 +15,6 @@ class Settings(BaseSettings):
     APP_DIR = BASE_DIR / "src/project_name"
     DEBUG: bool
 
-    CELERY_BROKER: str
-
-    HOST_NAME: str
-
     DB_USER: str
     DB_PASSWORD: str
     DB_HOST: str

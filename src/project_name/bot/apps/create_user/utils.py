@@ -3,14 +3,20 @@ import random
 
 import aiohttp
 from pydantic import EmailStr
+from fastapi import HTTPException, status
 
 from src.project_name.apps.auth.schemas import UserCreateSchema, SignInSchema, UserSignInSchema
 from src.project_name.apps.blog.schemas import BlogSchema, BlogInDBSchema
+from src.project_name.bot.config.settings import settings
 
 
 def generate_email(number_of_users: int) -> str:
+    domain_ = ['example.com', "gmail.com", "yandex.ru", "mail.ru", "yahoo.com"]
+
     for index in range(1, number_of_users+1):
-        yield f"user{index}@gmail.com"
+        username = ''.join(random.choices('abcdefghijklmnopqrstuvwxyz0123456789', k=10))
+        domain = random.choice(domain_)
+        yield f"{username}@{domain}"
 
 
 def generate_password(length=9) -> str:
@@ -29,7 +35,8 @@ async def sign_up_users(number_of_users: int):
         "error": list()
     }
 
-    URL = "http://localhost:8000/api/v1/auth/sign-up"
+    URL = settings.URL + "/auth/sign-up"
+
     async with aiohttp.ClientSession() as session:
 
         for email in generate_email(number_of_users):
@@ -56,7 +63,7 @@ async def sign_up_users(number_of_users: int):
 async def sign_in_users(users: list[UserCreateSchema]):
     responses = dict()
 
-    URL = "http://localhost:8000/api/v1/auth/sign-in"
+    URL = settings.URL + "/auth/sign-in"
 
     async with aiohttp.ClientSession() as session:
 
@@ -84,7 +91,7 @@ async def create_blog_with_author(
 ) -> list[BlogInDBSchema]:
     responses = list()
 
-    URL = "http://localhost:8000/api/v1/blog/"
+    URL = settings.URL + "/blog/"
     blog = BlogSchema(title="Blog")
 
     async with aiohttp.ClientSession() as session:
@@ -113,3 +120,44 @@ async def create_blog_with_author(
                         )
 
     return responses
+
+
+def get_blogs_ids(blogs):
+    return [blog["id"] for blog in blogs]
+
+
+def random_choice_blog_id(blogs_ids: list[int]):
+    return random.choice(blogs_ids)
+
+
+async def click_likes_random(
+    users: dict[EmailStr, UserSignInSchema],
+    max_likes_per_user: int
+):
+    URL = settings.URL + "/blog/"
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+                url=URL,
+        ) as blogs_response:
+            if blogs_response.status == 200:
+                blogs_ids = get_blogs_ids(await blogs_response.json())
+            else:
+                blogs_ids = []
+
+        if not blogs_ids:
+            raise HTTPException(status_code=status.HTTP_204_NO_CONTENT, detail="Not blogs")
+
+        for email, tokens in users.items():
+            """ get access_token for Authorization """
+            headers = {"Authorization": "Bearer {}".format(tokens.access_token)}
+
+            for _ in range(max_likes_per_user):
+                blog_id = random_choice_blog_id(blogs_ids)
+                LIKE_URL = settings.URL + f"/blog/{blog_id}"
+
+                async with session.post(
+                    url=LIKE_URL,
+                    headers=headers
+                ) as like_response:
+                    pass
